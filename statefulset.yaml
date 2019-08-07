@@ -1,0 +1,216 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  serviceName: mysql
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      initContainers:
+      - name: data-initialization
+        image: mariadb:10.4
+        ports:
+        - name: mysql
+          containerPort: 3306
+        command:
+        - bash
+        - "-c"
+        - |
+          function wait_db {
+            while ! mysqladmin ping -uroot -p${MYSQL_ROOT_PASSWORD} >/dev/null 2>&1;do
+              sleep 1
+              echo .
+            done
+          }
+          [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+          ordinal=${BASH_REMATCH[1]}
+          cp /mnt/config-map/pod.cnf /etc/mysql/conf.d/
+          echo "1;${ENCRYPTION_KEY}" > /etc/mysql/conf.d/.keys
+          echo -e "bind-address=$POD_IP" >> /etc/mysql/conf.d/pod.cnf
+          recent_backup=$(ls -drt /backup/*/ | tail -n 1)
+          if [ -f "/backup/master_info" ];then
+             last_master=$(cat /backup/master_info | awk '{print $1}' )
+          else
+             last_master=-1
+          fi
+          echo server-id=$(( $RANDOM % 1000 + 1 )) >> /etc/mysql/conf.d/pod.cnf
+          if [[ $ordinal -eq 0 && $last_master -eq '-1' ]]; then
+            if [ -z "$(ls /opt/mysql/data/)" ];then
+                mysql_install_db --datadir=/opt/mysql/data --user=mysql
+                chown -R mysql:mysql /opt/mysql/data
+            fi
+            mysqld_safe --datadir=/opt/mysql/data &
+            wait_db
+            count_backups=$(ls -dr /backup/*/ | wc -l)
+                while [ $(ls -dr /backup/*/ | wc -l) -gt 2 ];do
+                  echo "Deleting old backup"
+                  old_backup=$(ls -dr /backup/*/ | tail -n 1)
+                  rm -rf $old_backup
+                done
+            mysql -uroot -p${MYSQL_ROOT_PASSWORD} \
+            -e   "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}'; \
+                  GRANT ALL PRIVILEGES ON *.* TO '${DB_USERNAME}'@'%' IDENTIFIED BY '${DB_PASSWORD}'; \
+                  GRANT PROCESS, RELOAD, LOCK TABLES, REPLICATION CLIENT ON *.* to 'backup'@'%' IDENTIFIED BY '${BACKUP_PASSWORD}'; \
+                  GRANT SELECT,REPLICATION SLAVE,REPLICATION CLIENT ON *.* TO 'slave'@'%' IDENTIFIED BY '${SLAVE_PASSWORD}' WITH GRANT OPTION; \
+                  FLUSH PRIVILEGES;"
+            dir_name=$(date "+%b_%d_%Y_%H_%M_%S")
+            mkdir /backup/$dir_name
+            mariabackup --backup --password=${MYSQL_ROOT_PASSWORD} --user=root --target-dir=/backup/$dir_name --datadir=/opt/mysql/data
+          else
+            mariabackup --prepare --target-dir=$recent_backup
+            rsync -B=131072 -ravP --delete-after $recent_backup /opt/mysql/data/
+            chown -R mysql:mysql /opt/mysql/data
+            rm -rf /opt/mysql/data/ib_logfile*
+            mysqld_safe --datadir=/opt/mysql/data &
+            wait_db
+            #Avoid binlog conflict (the file might have changed during mariadb recovery)
+            rsync ${recent_backup}xtrabackup_binlog_info /opt/mysql/data/
+          fi
+          exit 0
+        env:
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: encryption_key
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: root_password
+        - name: SLAVE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: slave_password
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: db_username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: db_password
+        - name: BACKUP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: backup_password
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        volumeMounts:
+        - name: backup
+          mountPath: /backup
+        - name: conf
+          mountPath: /etc/mysql/conf.d
+        - name: config-map
+          mountPath: /mnt/config-map
+        - name: data
+          mountPath: /opt/mysql/data
+          subPath: mysql
+      containers:
+      - name: mysql
+        image: mariadb:10.4
+        command: ["mysqld_safe","--datadir=/opt/mysql/data"]
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: root_password
+        ports:
+        - name: mysql
+          containerPort: 3306
+        resources:
+          requests:
+            cpu: 1
+            memory: 1000Mi
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/bash","-c","[[ `hostname` =~ -([0-9]+)$ ]] || exit 1; ordinal=${BASH_REMATCH[1]}; [[ $(cat /backup/master_info | awk '{print $1}' ) -eq $ordinal ]] && rm /backup/master_info"]
+        livenessProbe:
+          exec:
+            command: ["/bin/bash","-c","mysqladmin ping -uroot -p${MYSQL_ROOT_PASSWORD}"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command: ["/bin/bash","-c","mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e 'SELECT 1'"]
+          initialDelaySeconds: 5
+          periodSeconds: 2
+          timeoutSeconds: 1
+        volumeMounts:
+        - name: backup
+          mountPath: /backup
+        - name: conf
+          mountPath: /etc/mysql/conf.d
+        - name: config-map
+          mountPath: /mnt/config-map
+        - name: data
+          mountPath: /opt/mysql/data
+          subPath: mysql
+      - name: background
+        image: mushroommagnet/mysql
+        command: ["/bin/bash","/root/background-script.sh"]
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: root_password
+        - name: SLAVE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: slave_password
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        ports:
+        - name: mysql
+          containerPort: 3306
+        volumeMounts:
+        - name: backup
+          mountPath: /backup
+        - name: data
+          mountPath: /opt/mysql/data
+          subPath: mysql
+        - name: conf
+          mountPath: /mysql_conf/
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+      volumes:
+      - name: backup
+        persistentVolumeClaim:
+          claimName: mysql-backup-pvc
+      - name: conf
+        emptyDir: {}
+      - name: config-map
+        configMap:
+          name: mysql
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: default
+      resources:
+        requests:
+          storage: 10Gi

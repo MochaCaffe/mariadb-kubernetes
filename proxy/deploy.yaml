@@ -1,0 +1,99 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: proxysql
+  labels:
+    app: proxysql
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: proxysql
+      tier: frontend
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: proxysql
+        tier: frontend
+    spec:
+      restartPolicy: Always
+      initContainers:
+      - name: config-init
+        image: severalnines/proxysql:1.4.12
+        command:
+        - bash
+        - "-c"
+        - |
+          cp /configmap/proxysql.cnf /mnt/proxysql.cnf
+          sed 's/<admin_credentials>/admin_credentials="'${PROXYADMIN_USERNAME}':'${PROXYADMIN_PASSWORD}'"/' -i /mnt/proxysql.cnf
+          sed 's/<monitor_password>/monitor_password="'${SLAVE_PASSWORD}'"/' -i /mnt/proxysql.cnf
+          sed 's/<username>/username="mgk"/' -i /mnt/proxysql.cnf
+          sed 's/<password>/password="'${DB_PASSWORD}'"/' -i /mnt/proxysql.cnf
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: PROXYADMIN_USERNAME
+          value: proxyadmin
+        - name: PROXYADMIN_PASSWORD
+          value: psd
+        - name: SLAVE_PASSWORD
+          value: psd
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: db_username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: db_password
+        volumeMounts:
+        - name: proxysql-config
+          mountPath: /mnt
+        - name: configmap
+          mountPath: /configmap/proxysql.cnf
+          subPath: proxysql.cnf
+      containers:
+      - image: severalnines/proxysql:1.4.12
+        name: proxysql
+        volumeMounts:
+        - name: proxysql-config
+          mountPath: /etc/proxysql.cnf
+          subPath: proxysql.cnf
+        ports:
+        - containerPort: 6033
+          name: proxysql-mysql
+        - containerPort: 6032
+          name: proxysql-admin
+      volumes:
+      - name: proxysql-config
+        emptyDir: {}
+      - name: configmap
+        configMap:
+          name: proxysql-configmap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxysql
+  labels:
+    app: proxysql
+    tier: frontend
+spec:
+  type: NodePort
+  ports:
+  - nodePort: 30033
+    port: 3306
+    targetPort: 6033
+    name: proxysql-mysql
+  - nodePort: 30032
+    port: 6032
+    name: proxysql-admin
+  selector:
+    app: proxysql
+    tier: frontend
