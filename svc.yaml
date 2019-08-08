@@ -6,15 +6,10 @@ metadata:
   labels:
     app: mysql
 spec:
-  externalTrafficPolicy: Local
   ports:
-  - nodePort: 30090
-    targetPort: 3306
-    port: 30090
+  - name: mysql
+    port: 3306
     protocol: TCP
-    #- name: mysql
-    #port: 3306
-  #clusterIP: None
-  type: NodePort
+  clusterIP: None
   selector:
     app: mysql

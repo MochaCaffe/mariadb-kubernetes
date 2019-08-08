@@ -6,7 +6,6 @@ metadata:
     app: mysql
 data:
   pod.cnf: |
-    # Apply this config only on the master.
     [mysqld]
     log_bin=/opt/mysql/data/mysql-bin
     relay_log=/opt/mysql/data/mysql-relay-bin

@@ -49,7 +49,7 @@ spec:
             mysqld_safe --datadir=/opt/mysql/data &
             wait_db
             count_backups=$(ls -dr /backup/*/ | wc -l)
-                while [ $(ls -dr /backup/*/ | wc -l) -gt 2 ];do
+                while [ $(ls -dr /backup/*/ | wc -l) -gt 3 ];do
                   echo "Deleting old backup"
                   old_backup=$(ls -dr /backup/*/ | tail -n 1)
                   rm -rf $old_backup
@@ -67,7 +67,6 @@ spec:
             mariabackup --prepare --target-dir=$recent_backup
             rsync -B=131072 -ravP --delete-after $recent_backup /opt/mysql/data/
             chown -R mysql:mysql /opt/mysql/data
-            rm -rf /opt/mysql/data/ib_logfile*
             mysqld_safe --datadir=/opt/mysql/data &
             wait_db
             #Avoid binlog conflict (the file might have changed during mariadb recovery)
@@ -134,8 +133,8 @@ spec:
           containerPort: 3306
         resources:
           requests:
-            cpu: 1
-            memory: 1000Mi
+            cpu: 3
+            memory: 2000Mi
         lifecycle:
           preStop:
             exec:
@@ -210,7 +209,7 @@ spec:
       name: data
     spec:
       accessModes: ["ReadWriteOnce"]
-      storageClassName: default
+      storageClassName: openebs-jiva-default
       resources:
         requests:
           storage: 10Gi
