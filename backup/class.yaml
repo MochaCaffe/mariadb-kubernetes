@@ -1,0 +1,10 @@
+apiVersion: storage.k8s.io/v1beta1
+kind: StorageClass
+metadata:
+  name: mysql-backup-class
+provisioner: kubernetes.io/glusterfs
+parameters:
+  resturl: "http://10.110.128.244:8080"
+  restuser: "user"
+  restuserkey: "psd"
+  volumetype: disperse:4:2

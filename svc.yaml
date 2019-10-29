@@ -8,8 +8,10 @@ metadata:
 spec:
   ports:
   - name: mysql
-    port: 3306
     protocol: TCP
+    port: 3306
+  - name: backup
+    port: 3301
   clusterIP: None
   selector:
     app: mysql

@@ -1,0 +1,58 @@
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: mysql-backup
+spec:
+  schedule: "0 */5 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: data-mysql-0
+            - name: backup
+              persistentVolumeClaim:
+                claimName: mysql-backup-pvc
+          containers:
+          - name: mysql-backup
+            image: mushroommagnet/mysql
+            ports:
+              - name: mysql
+                containerPort: 3306
+            command: 
+              - bash
+              - "-c"
+              - |
+                online_master=$(cat /backup/master_info | awk '{print $1}')
+                mysql -h mysql-${online_master}.mysql -uslave -p${SLAVE_PASSWORD} -e 'SELECT 1' &> /dev/null
+                if [ "$?" -eq 0 ];then
+                        echo "Mariadb cluster online. Creating a backup..."
+                        netcat mysql-${online_master}.mysql 3301
+                fi
+            env:
+              - name: ENCRYPTION_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: mysql-secret
+                    key: encryption_key
+              - name: ALL_DATABASES
+                value: confirm
+              - name: SLAVE_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: mysql-secret
+                    key: slave_password
+              - name: BACKUP_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: mysql-secret
+                    key: backup_password
+            volumeMounts:
+            - name: backup
+              mountPath: /backup
+            - name: data
+              mountPath: /opt/mysql/data
+          restartPolicy: OnFailure

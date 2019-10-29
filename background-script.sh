@@ -20,7 +20,7 @@ do
 	if [ "$?" -eq 0 ];then
 		echo "Peer ${ordinal} already online."
 	else
-		#Looking for the first available pod
+		#Looking for the next available pod
 		while ! mysql -h mysql-${ordinal}.mysql.default.svc.cluster.local -uslave -p${MYSQL_ROOT_PASSWORD} -e 'SELECT 1' &> /dev/null
 		do
 			sleep 1
@@ -58,7 +58,18 @@ do
 		RESET SLAVE;
 EOF
 
-		[ "${ordinal}" -ne 0 ] && echo "mysql-bin.000001 4" > $(ls -drt /backup/*/ | tail -n 1)xtrabackup_binlog_info
+		if [ "${ordinal}" -ne 0 ];
+		then
+			echo "mysql-bin.000001 4" > $(ls -drt /backup/*/ | tail -n 1)xtrabackup_binlog_info
+			if [ -f "/backup/cronjob_binlog" ];
+			then
+				BACKUP_BIN_FILE=$(cat /backup/cronjob_binlog | grep "mysql-${ordinal}" | awk '{print $2}')
+				BACKUP_BIN_POS=$(cat /backup/cronjob_binlog | grep "mysql-${ordinal}" | awk '{print $3}')
+
+				[ ! -z "$BACKUP_BIN_FILE" ] && echo "$BACKUP_BIN_FILE $BACKUP_BIN_POS" > $(ls -drt /backup/*/ | tail -n 1)xtrabackup_binlog_info
+			fi
+		fi
+
 
           	NEWMASTER_BIN_FILE=$(mysql -h $POD_IP -uroot -p${MYSQL_ROOT_PASSWORD} -e 'show master status' | sed 's/|.*|/|/' | sed '1d' | cut -f 1)
                 NEWMASTER_BIN_POS=$(mysql -h $POD_IP -uroot -p${MYSQL_ROOT_PASSWORD} -e 'show master status' | sed 's/|.*|/|/' | sed '1d' | cut -f 2)
@@ -66,7 +77,8 @@ EOF
 
 		mysql -h $POD_IP -uroot -p${MYSQL_ROOT_PASSWORD} -e "SET GLOBAL read_only=0;"
 
-		sleep infinity
+		netcat -k -lp 3301 -c "/root/backup-script.sh"
+
 
 	else
 		#Slave init
@@ -86,13 +98,13 @@ EOF
 		fi
 		if [[ -z "$BIN_FILE" ]];
                 then
-			echo "Error: cannot get bin data from master"
+			echo "ERROR: cannot get bin data from master"
 			continue
 		fi
 
 		[ "$BIN_POS" -eq 4 ] && echo "WARNING: Bin info was reset. This could mean that the cluster recovered from master crash"
 
-		echo -e "--- Bin data received ---\n- MASTER IP: $MASTER_IP \n- BIN FILE: $BIN_FILE\n- BIN POS: $BIN_POS"
+		echo -e "--- BIN DATA received ---\n- MASTER IP: $MASTER_IP \n- BIN FILE: $BIN_FILE\n- BIN POS: $BIN_POS"
 		mysql -h $POD_IP -uroot -p${MYSQL_ROOT_PASSWORD}<<EOF
 		STOP SLAVE;
 		CHANGE MASTER TO 
