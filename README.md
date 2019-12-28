@@ -1,5 +1,5 @@
 # MariaDB master-slave replication on k8s
-* Under development *
+* Under development
 
 ## Deployment
 ### Cluster deployment
