@@ -29,7 +29,7 @@ spec:
           cp /configmap/proxysql.cnf /mnt/proxysql.cnf
           sed 's/<admin_credentials>/admin_credentials="'${PROXYADMIN_USERNAME}':'${PROXYADMIN_PASSWORD}'"/' -i /mnt/proxysql.cnf
           sed 's/<monitor_password>/monitor_password="'${SLAVE_PASSWORD}'"/' -i /mnt/proxysql.cnf
-          sed 's/<username>/username="mgk"/' -i /mnt/proxysql.cnf
+          sed 's/<username>/username="'${DB_USERNAME}'"/' -i /mnt/proxysql.cnf
           sed 's/<password>/password="'${DB_PASSWORD}'"/' -i /mnt/proxysql.cnf
         env:
         - name: POD_IP
@@ -39,9 +39,15 @@ spec:
         - name: PROXYADMIN_USERNAME
           value: proxyadmin
         - name: PROXYADMIN_PASSWORD
-          value: psd
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: admin_password
         - name: SLAVE_PASSWORD
-          value: psd
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: slave_password
         - name: DB_USERNAME
           valueFrom:
             secretKeyRef:

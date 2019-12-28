@@ -32,7 +32,6 @@ spec:
           [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
           ordinal=${BASH_REMATCH[1]}
           cp /mnt/config-map/pod.cnf /etc/mysql/conf.d/
-          echo "1;${ENCRYPTION_KEY}" > /etc/mysql/conf.d/.keys
           echo -e "bind-address=$POD_IP" >> /etc/mysql/conf.d/pod.cnf
           recent_backup=$(ls -drt /backup/*/ | tail -n 1)
           if [ -f "/backup/master_info" ];then
@@ -75,16 +74,11 @@ spec:
           fi
           exit 0
         env:
-        - name: ENCRYPTION_KEY
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secret
-              key: encryption_key
         - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
               name: mysql-secret
-              key: root_password
+              key: admin_password
         - name: SLAVE_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -211,8 +205,47 @@ spec:
   - metadata:
       name: data
     spec:
+      storageClassName: openebs-jiva-default
       accessModes: ["ReadWriteOnce"]
-      storageClassName: data
       resources:
         requests:
-          storage: 10Gi
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  ports:
+  - name: mysql
+    protocol: TCP
+    port: 3306
+  - name: backup
+    port: 3301
+  clusterIP: None
+  selector:
+    app: mysql
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+data:
+  pod.cnf: |
+    [mysqld]
+    #Bin logs
+    log_bin=/opt/mysql/data/mysql-bin
+    relay_log=/opt/mysql/data/mysql-relay-bin
+    log_slave_updates=true
+
+    #Some tweaks
+    innodb_flush_method = O_DIRECT
+    innodb_buffer_pool_size = 1G
+    innodb_flush_log_at_trx_commit=1
+    innodb_log_file_size = 256M
+    innodb_thread_concurrency = 0
+---
