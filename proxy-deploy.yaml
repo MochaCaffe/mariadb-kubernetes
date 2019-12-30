@@ -47,7 +47,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: mysql-secret
-              key: slave_password
+              key: admin_password
         - name: DB_USERNAME
           valueFrom:
             secretKeyRef:
@@ -81,7 +81,7 @@ spec:
         emptyDir: {}
       - name: configmap
         configMap:
-          name: proxysql-configmap
+          name: proxysql
 ---
 apiVersion: v1
 kind: Service
@@ -103,3 +103,31 @@ spec:
   selector:
     app: proxysql
     tier: frontend
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxysql
+data:
+  proxysql.cnf: "datadir=\"/var/lib/proxysql\"\nadmin_variables=\n{\n        <admin_credentials>\n
+    \       mysql_ifaces=\"0.0.0.0:6032\"\n        refresh_interval=2000\n}\nmysql_variables=\n{\n
+    \       threads=4\n        max_connections=2048\n        default_query_delay=0\n
+    \       default_query_timeout=36000000\n        have_compress=true\n        poll_timeout=2000\n
+    \       interfaces=\"0.0.0.0:6033;/tmp/proxysql.sock\"\n        default_schema=\"information_schema\"\n
+    \       stacksize=1048576\n        server_version=\"5.1.30\"\n        connect_timeout_server=7000\n
+    \       connect_timeout_server_max=30000;\n        monitor_history=60000\n        monitor_connect_interval=200000\n
+    \       monitor_ping_interval=200000\n\tping_interval_server_msec=5000\n        ping_timeout_server=200\n
+    \       commands_stats=true\n        sessions_sort=true\n        monitor_username=\"slave\"\n
+    \       <monitor_password>\n}\nmysql_replication_hostgroups =\n(\n        { writer_hostgroup=1,
+    reader_hostgroup=2, comment=\"MySQL Replication\" }\n)\nmysql_servers =\n(\n        {
+    address=\"mysql-0.mysql\" , port=3306 , hostgroup=2, max_connections=100 },\n
+    \       { address=\"mysql-1.mysql\" , port=3306 , hostgroup=2, max_connections=100
+    },\n        { address=\"mysql-2.mysql\" , port=3306 , hostgroup=2, max_connections=100
+    }\n)\nmysql_users =\n(\n        { <username> , <password> , default_hostgroup
+    = 1 , active = 1 }\n)\nmysql_query_rules =\n(\n        {\n                rule_id=100\n
+    \               active=1\n                match_pattern=\"^SELECT .* FOR UPDATE\"\n
+    \               destination_hostgroup=1\n                apply=1\n        },\n
+    \       {\n                rule_id=200\n                active=1\n                match_pattern=\"^SELECT
+    .*\"\n                destination_hostgroup=2\n                apply=1\n        },\n
+    \       {\n                rule_id=300\n                active=1\n                match_pattern=\".*\"\n
+    \               destination_hostgroup=1\n                apply=1\n        }\n)\n"

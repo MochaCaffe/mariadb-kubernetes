@@ -14,7 +14,7 @@ spec:
         app: mysql
     spec:
       initContainers:
-      - name: data-initialization
+      - name: init
         image: mariadb:10.4
         ports:
         - name: mysql
@@ -83,7 +83,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: mysql-secret
-              key: slave_password
+              key: admin_password
         - name: DB_USERNAME
           valueFrom:
             secretKeyRef:
@@ -98,7 +98,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: mysql-secret
-              key: backup_password
+              key: admin_password
         - name: POD_IP
           valueFrom:
             fieldRef:
@@ -122,14 +122,14 @@ spec:
           valueFrom:
             secretKeyRef:
               name: mysql-secret
-              key: root_password
+              key: admin_password
         ports:
         - name: mysql
           containerPort: 3306
         resources:
           requests:
             cpu: 3
-            memory: 2000Mi
+            memory: 1000Mi
         lifecycle:
           preStop:
             exec:
@@ -165,12 +165,12 @@ spec:
           valueFrom:
             secretKeyRef:
               name: mysql-secret
-              key: root_password
+              key: admin_password
         - name: SLAVE_PASSWORD
           valueFrom:
             secretKeyRef:
               name: mysql-secret
-              key: slave_password
+              key: admin_password
         - name: POD_IP
           valueFrom:
             fieldRef:
@@ -205,7 +205,7 @@ spec:
   - metadata:
       name: data
     spec:
-      storageClassName: openebs-jiva-default
+      storageClassName: rozofs
       accessModes: ["ReadWriteOnce"]
       resources:
         requests:
