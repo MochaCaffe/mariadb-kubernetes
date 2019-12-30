@@ -205,7 +205,6 @@ spec:
   - metadata:
       name: data
     spec:
-      storageClassName: rozofs
       accessModes: ["ReadWriteOnce"]
       resources:
         requests:
