@@ -26,7 +26,7 @@ $ kubectl apply -f secrets.yaml
 ```
 - Create a backup volume to be shared between pods in order to sync data at initialization. The provisioner has to accept Read-Write-Many volumes.
 ```
-$ kubectl create -f backup-pvc.yaml
+$ kubectl create -f pvc.yaml
 ```
 - Deploy MariaDB instances (by default: 3 replicas)
 ```
@@ -35,12 +35,7 @@ $ kubectl apply -f statefulset.yaml
 The database cluster should be ready now to accept requests and replication should be operational. SQL write requests have to be sent to the current master instance.
 ### ProxySQL deployment
 In order to uniformly send requests (writes,reads) to one entity without knowing the current state of the cluster, we can deploy ProxySQL:
-- Create a k8s configmap to set up the proxy credentials from the secret mysql-secret. 
 ```
-$ kubectl create cm proxysql-configmap --from-file=proxy/proxysql.cnf
-```
-- Deploy 2 ProxySQL instances:
-```
-$ kubectl apply -f proxy/deploy.yaml
+$ kubectl apply -f proxy-deploy.yaml
 ```
 
