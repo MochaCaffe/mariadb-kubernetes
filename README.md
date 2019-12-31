@@ -16,10 +16,8 @@ metadata:
 type: Opaque
 data:
   admin_password: 
-  slave_password: 
   db_username: 
   db_password:
-  backup_password:
 ```
 ``` bash
 $ kubectl apply -f secrets.yaml
