@@ -69,8 +69,6 @@ spec:
             chown -R mysql:mysql /opt/mysql/data
             mysqld_safe --datadir=/opt/mysql/data &
             wait_db
-            #Avoid binlog conflict (the file might have changed during mariadb recovery)
-            rsync ${recent_backup}xtrabackup_binlog_info /opt/mysql/data/
           fi
           exit 0
         env:
@@ -205,6 +203,7 @@ spec:
   - metadata:
       name: data
     spec:
+      storageClassName: openebs-jiva-default
       accessModes: ["ReadWriteOnce"]
       resources:
         requests:
