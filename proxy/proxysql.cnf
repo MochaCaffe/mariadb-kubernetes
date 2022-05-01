@@ -37,9 +37,7 @@ mysql_servers =
 (
         { address="mysql-0.mysql" , port=3306 , hostgroup=2, max_connections=100 },
         { address="mysql-1.mysql" , port=3306 , hostgroup=2, max_connections=100 },
-        { address="mysql-2.mysql" , port=3306 , hostgroup=2, max_connections=100 },
-        { address="mysql-3.mysql" , port=3306 , hostgroup=2, max_connections=100 },
-        { address="mysql-4.mysql" , port=3306 , hostgroup=2, max_connections=100 }
+        { address="mysql-2.mysql" , port=3306 , hostgroup=2, max_connections=100 }
 )
 mysql_users =
 (

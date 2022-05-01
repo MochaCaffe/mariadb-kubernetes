@@ -1,1 +1,0 @@
-../mysql/new-script.sh

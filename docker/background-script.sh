@@ -83,16 +83,18 @@ EOF
 	else
 		#Slave init
 		echo "Switching to the master"
-		if [ -f "/opt/mysql/data/xtrabackup_binlog_info" ];then
+		while [ $(cat /backup/master_info | awk '{print $2}') != "$MASTER_IP" ];
+		do
+			sleep 1
+		done
+		recent_backup=$(ls -drt /backup/*/ | tail -n 1)
+		if [ -f "${recent_backup}xtrabackup_binlog_info" ];then
+			rsync ${recent_backup}xtrabackup_binlog_info /opt/mysql/data/
 			echo "Reading BIN data from latest backup"
 			BIN_FILE=$(cat /opt/mysql/data/xtrabackup_binlog_info | awk '{print $1}')
 			BIN_POS=$(cat /opt/mysql/data/xtrabackup_binlog_info | awk '{print $2}')
 			rm /opt/mysql/data/xtrabackup_binlog_info
 		else
-			while [ $(cat /backup/master_info | awk '{print $2}') != "$MASTER_IP" ];
-			do
-				sleep 1
-			done
 				BIN_FILE=$(cat /backup/master_info | awk '{print $3}')
 				BIN_POS=$(cat /backup/master_info | awk '{print $4}')
 		fi
