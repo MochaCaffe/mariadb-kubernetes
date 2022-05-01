@@ -18,7 +18,7 @@ spec:
                 claimName: mysql-backup-pvc
           containers:
           - name: mysql-backup
-            image: mushroommagnet/mysql
+            image: mochacoffee/mysql
             ports:
               - name: mysql
                 containerPort: 3306

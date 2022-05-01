@@ -164,7 +164,7 @@ spec:
           mountPath: /opt/mysql/data
           subPath: mysql
       - name: background
-        image: mushroommagnet/mysql
+        image: mochacoffee/mysql
         command: ["/bin/bash","/root/background-script.sh"]
         env:
         - name: MYSQL_ROOT_PASSWORD
